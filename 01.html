@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <!-- HLS.js for HLS streaming support in non-Safari browsers -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     :root {
@@ -18,7 +17,7 @@
       --popover: 0 0% 98%;
       --popover-foreground: 222 47% 11%;
       --primary: 199 89% 48%;
-      --primary-foreground: 0 0% 100%;a
+      --primary-foreground: 0 0% 100%;
       --secondary: 210 40% 96%;
       --secondary-foreground: 222 47% 11%;
       --muted: 210 40% 96%;
@@ -75,6 +74,7 @@
     @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
     @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+    @keyframes fade-in-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
     /* Header */
     .header {
@@ -203,9 +203,15 @@
     .stat-card-label { font-size: 0.625rem; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
 
     .alerts-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 17.5rem; overflow-y: auto; }
-    .alert-item { padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid; }
+    .alert-item { padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid; animation: fade-in-up 0.3s; }
     .alert-item.critical { border-color: hsl(var(--destructive) / 0.5); background: hsl(var(--destructive) / 0.1); }
+    .alert-item.moderate { border-color: hsl(var(--warning) / 0.5); background: hsl(var(--warning) / 0.1); }
+    .alert-item.minor { border-color: hsl(var(--success) / 0.5); background: hsl(var(--success) / 0.1); }
     
+    .alert-content { display: flex; gap: 0.75rem; align-items: start; }
+    .alert-message { font-size: 0.8125rem; font-weight: 600; line-height: 1.4; margin-bottom: 0.25rem; }
+    .alert-meta { font-size: 0.625rem; color: hsl(var(--muted-foreground)); display: flex; gap: 0.5rem; }
+
     /* Telemetry Bar */
     .telemetry-bar {
       display: flex; align-items: center; justify-content: space-between;
@@ -445,6 +451,7 @@
     let processingInterval = null;
     let frameCount = 0;
     let processedCount = 0;
+    let alerts = [];
 
     // Connect Stream
     document.getElementById('connectStream').onclick = async () => {
@@ -564,6 +571,9 @@
     function renderDetections(detections) {
       const container = document.getElementById('detectionBoxes');
       container.innerHTML = detections.map(d => {
+        // Only trigger alerts for high confidence items occasionally to avoid spam
+        if(Math.random() > 0.95) addAlert(d);
+
         // If bbox is all zeros (WebRTC), don't draw box
         if(d.bbox[2] === 0) return '';
         
@@ -585,6 +595,37 @@
       document.getElementById('countModerate').innerText = counts.moderate;
       document.getElementById('countMinor').innerText = counts.minor;
       document.getElementById('countTotal').innerText = detections.length;
+    }
+
+    function addAlert(detection) {
+      const id = Date.now();
+      const alert = {
+        id,
+        type: detection.severity,
+        message: `${detection.class.toUpperCase()} Detected`,
+        time: new Date().toLocaleTimeString()
+      };
+      
+      // Add to front, keep max 5
+      alerts = [alert, ...alerts].slice(0, 5);
+      renderAlerts();
+    }
+
+    function renderAlerts() {
+      const list = document.getElementById('alertsList');
+      list.innerHTML = alerts.map(a => `
+        <div class="alert-item ${a.type}">
+          <div class="alert-content">
+            <div class="alert-text">
+              <p class="alert-message">${a.message}</p>
+              <div class="alert-meta">
+                <span>${a.time}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('alertCount').innerText = alerts.length;
     }
 
     // Clock
