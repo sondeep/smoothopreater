@@ -13,9 +13,7 @@ print("⏳ Initializing Skywatch Backend...")
 # ==========================================
 # 🔧 ROBOFLOW CONFIGURATION
 # ==========================================
-# Your Private API Key
 ROBOFLOW_API_KEY = "860lkeYzSam08d3D9wl3" 
-# Default Project Config (Used for frame-by-frame fallback)
 PROJECT_ID = "damage-assessment" 
 VERSION_NUMBER = 1 
 
@@ -49,7 +47,6 @@ def init_webrtc():
             return jsonify({'error': 'No WebRTC offer provided'}), 400
 
         # 2. Construct Payload for Roboflow API
-        # We inject the API Key here server-side for security
         roboflow_payload = {
             "offer": offer,
             "api_key": ROBOFLOW_API_KEY,
@@ -68,7 +65,6 @@ def init_webrtc():
         response = requests.post(roboflow_url, json=roboflow_payload)
         
         if response.status_code != 200:
-            print(f"❌ Roboflow Error: {response.text}")
             return jsonify({'error': 'Failed to initialize with Roboflow', 'details': response.json()}), response.status_code
 
         # 4. Return the Answer to Frontend
@@ -102,7 +98,7 @@ def predict():
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Save temp file (Roboflow SDK prefers file paths)
+        # Save temp file
         temp_filename = "temp_frame.jpg"
         cv2.imwrite(temp_filename, img)
 
@@ -112,7 +108,6 @@ def predict():
         detections = []
         if 'predictions' in prediction_group:
             for p in prediction_group['predictions']:
-                # Convert center-xy to top-left-xy
                 x1 = p['x'] - (p['width'] / 2)
                 y1 = p['y'] - (p['height'] / 2)
                 
@@ -130,7 +125,6 @@ def predict():
         return jsonify({"detections": detections})
 
     except Exception as e:
-        # print(f"Prediction Error: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
