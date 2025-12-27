@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SKYWATCH AI - Damage Assessment System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- HLS.js for HLS streaming support in non-Safari browsers -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 222 47% 11%;
+      --card: 0 0% 98%;
+      --card-foreground: 222 47% 11%;
+      --popover: 0 0% 98%;
+      --popover-foreground: 222 47% 11%;
+      --primary: 199 89% 48%;
+      --primary-foreground: 0 0% 100%;a
+      --secondary: 210 40% 96%;
+      --secondary-foreground: 222 47% 11%;
+      --muted: 210 40% 96%;
+      --muted-foreground: 215 20% 35%;
+      --accent: 210 40% 96%;
+      --accent-foreground: 222 47% 11%;
+      --destructive: 0 84% 60%;
+      --destructive-foreground: 0 0% 100%;
+      --warning: 38 92% 50%;
+      --success: 142 76% 36%;
+      --border: 214 32% 91%;
+      --input: 214 32% 91%;
+      --ring: 199 89% 48%;
+      --radius: 0.5rem;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+      color: hsl(var(--foreground));
+      min-height: 100vh;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .glass-panel {
+      background: linear-gradient(135deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.9));
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .glass-panel:hover {
+      border-color: hsl(var(--border) / 0.8);
+      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15), 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .glow-primary {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.4), 0 0 40px hsl(var(--primary) / 0.15), 0 0 60px hsl(var(--primary) / 0.05);
+    }
+
+    /* Animations */
+    @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(calc(100vh * 10)); } }
+    @keyframes pulse-glow { 0%, 100% { opacity: 1; box-shadow: 0 0 5px currentColor; } 50% { opacity: 0.7; box-shadow: 0 0 20px currentColor; } }
+    @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-radius: calc(var(--radius) + 0.25rem);
+    }
+
+    .header-left, .header-right { display: flex; align-items: center; gap: 1.5rem; }
+    .logo-container { display: flex; align-items: center; gap: 0.75rem; }
+
+    .logo-icon {
+      width: 2rem; height: 2rem; border-radius: var(--radius);
+      background: hsl(var(--primary) / 0.2);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .logo-icon svg { width: 1rem; height: 1rem; color: hsl(var(--primary)); }
+    .logo-text h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo-text p { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: hsl(var(--muted-foreground)); font-weight: 500; }
+
+    .divider { width: 1px; height: 1.5rem; background: hsl(var(--border)); }
+
+    .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
+    .status-dot { position: relative; width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+    .status-dot.online { background: hsl(var(--success)); }
+    .status-dot.warning { background: hsl(var(--warning)); }
+    .status-dot.offline { background: hsl(var(--destructive)); }
+    .status-dot.pulse::after {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      background: inherit; opacity: 0.5; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+    .status-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: hsl(var(--muted-foreground)); }
+    .status-value { font-size: 0.8125rem; color: hsl(var(--foreground)); font-weight: 600; }
+
+    /* Main Content */
+    .main-content { flex: 1; display: flex; gap: 1.25rem; min-height: 0; }
+    .video-container { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    .video-feed {
+      position: relative; flex: 1; border-radius: calc(var(--radius) + 0.25rem);
+      overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .video-feed video, .video-feed img { width: 100%; height: 100%; object-fit: cover; }
+    
+    .scan-line { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .scan-line::before {
+      content: ''; display: block; width: 100%; height: 2px;
+      background: linear-gradient(to right, transparent, hsl(var(--primary) / 0.5), transparent);
+      animation: scan 4s linear infinite;
+    }
+
+    .grid-overlay {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.2;
+      background-image: linear-gradient(to right, hsl(var(--primary) / 0.1) 1px, transparent 1px),
+                        linear-gradient(to bottom, hsl(var(--primary) / 0.1) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+
+    .crosshair {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    }
+    .crosshair svg { width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.3); }
+
+    .video-info-top-left { position: absolute; top: 0.75rem; left: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+    .rec-indicator { display: flex; align-items: center; gap: 0.5rem; }
+    .rec-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: hsl(var(--destructive)); animation: blink 1s infinite; }
+    .rec-text { font-size: 0.8125rem; font-weight: 700; color: hsl(var(--destructive)); letter-spacing: 0.1em; }
+    .unit-text { font-size: 0.625rem; color: hsl(var(--foreground) / 0.7); }
+
+    .video-info-top-right { position: absolute; top: 0.75rem; right: 0.75rem; text-align: right; }
+    .frame-counter { font-size: 0.8125rem; color: hsl(var(--foreground) / 0.8); font-weight: 500; }
+
+    .video-controls {
+      position: absolute; bottom: 0.75rem; right: 0.75rem; display: flex; gap: 0.5rem;
+    }
+
+    .control-btn {
+      padding: 0.625rem; border-radius: calc(var(--radius) + 0.125rem); border: none; cursor: pointer;
+      background: hsl(var(--secondary)); backdrop-filter: blur(8px);
+    }
+    .control-btn svg { width: 1rem; height: 1rem; color: hsl(var(--foreground)); }
+
+    /* Stream Status */
+    .stream-status {
+      position: absolute; top: 0.75rem; left: 50%; transform: translateX(-50%);
+      padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; z-index: 10;
+    }
+    .stream-status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: hsl(var(--warning)); animation: blink 1s infinite; }
+    .stream-status-dot.connected { background: hsl(var(--success)); animation: none; }
+    .stream-status-dot.error { background: hsl(var(--destructive)); animation: blink 0.5s infinite; }
+    .stream-status-text { font-size: 0.75rem; font-weight: 600; color: hsl(var(--foreground)); }
+
+    /* Detection Boxes */
+    .detection-box { position: absolute; border-width: 2px; border-style: solid; pointer-events: none; }
+    .detection-box.critical { border-color: hsl(var(--destructive)); animation: pulse-glow 2s ease-in-out infinite; }
+    .detection-box.moderate { border-color: hsl(var(--warning)); }
+    .detection-box.minor { border-color: hsl(var(--success)); }
+    
+    .detection-label {
+      position: absolute; top: -1.5rem; left: 0; padding: 0.125rem 0.375rem;
+      font-size: 0.625rem; font-weight: 700; text-transform: uppercase; white-space: nowrap;
+    }
+    .detection-label.critical { background: hsl(var(--destructive) / 0.1); color: hsl(var(--destructive)); }
+    .detection-label.moderate { background: hsl(var(--warning) / 0.1); color: hsl(var(--warning)); }
+    .detection-label.minor { background: hsl(var(--success) / 0.1); color: hsl(var(--success)); }
+
+    /* Sidebar */
+    .sidebar { width: 22rem; display: flex; flex-direction: column; gap: 1.25rem; flex-shrink: 0; }
+    .panel { padding: 1.25rem; border-radius: calc(var(--radius) + 0.25rem); }
+    .panel-title { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem; }
+    .panel-title-bar { width: 0.375rem; height: 1.25rem; border-radius: 9999px; }
+    .panel-title-bar.primary { background: hsl(var(--primary)); }
+    .panel-title-bar.destructive { background: hsl(var(--destructive)); }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .stat-card { padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid; position: relative; }
+    .stat-card.critical { border-color: hsl(var(--destructive) / 0.3); background: hsl(var(--destructive) / 0.05); }
+    .stat-card.moderate { border-color: hsl(var(--warning) / 0.3); background: hsl(var(--warning) / 0.05); }
+    .stat-card.minor { border-color: hsl(var(--success) / 0.3); background: hsl(var(--success) / 0.05); }
+    
+    .stat-card-count { font-size: 1.75rem; font-weight: 700; }
+    .stat-card-count.critical { color: hsl(var(--destructive)); }
+    .stat-card-count.moderate { color: hsl(var(--warning)); }
+    .stat-card-count.minor { color: hsl(var(--success)); }
+    .stat-card-label { font-size: 0.625rem; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+
+    .alerts-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 17.5rem; overflow-y: auto; }
+    .alert-item { padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid; }
+    .alert-item.critical { border-color: hsl(var(--destructive) / 0.5); background: hsl(var(--destructive) / 0.1); }
+    
+    /* Telemetry Bar */
+    .telemetry-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-radius: calc(var(--radius) + 0.25rem);
+    }
+    .telemetry-item { display: flex; align-items: center; gap: 0.5rem; }
+    .telemetry-value { font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .telemetry-label { font-size: 0.625rem; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+
+    /* Modals */
+    .stream-modal {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .stream-modal.active { display: flex; }
+    .stream-modal-content {
+      background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) + 0.5rem); padding: 2rem; max-width: 600px; width: 90%;
+    }
+    .stream-input {
+      width: 100%; padding: 0.75rem; background: hsl(var(--secondary));
+      border: 1px solid hsl(var(--border)); border-radius: var(--radius);
+      color: hsl(var(--foreground)); margin-bottom: 1rem;
+    }
+    .stream-btn {
+      padding: 0.875rem 1.5rem; border-radius: var(--radius); border: none; font-weight: 600; cursor: pointer;
+    }
+    .stream-btn-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+    .stream-btn-secondary { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+
+    /* Toasts */
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast { padding: 1rem; border-radius: 0.5rem; border: 1px solid; background: hsl(var(--card)); animation: fade-in-up 0.3s; }
+    .toast.error { background: hsl(var(--destructive)); color: white; border-color: hsl(var(--destructive)); }
+    .toast.warning { background: hsl(var(--warning)); color: white; border-color: hsl(var(--warning)); }
+  </style>
+</head>
+<body>
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Header -->
+  <header class="header glass-panel">
+    <div class="header-left">
+      <div class="logo-container">
+        <div class="logo-icon glow-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>
+        </div>
+        <div class="logo-text">
+          <h1>SKYWATCH AI</h1>
+          <p class="font-mono">Damage Assessment</p>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="status-indicator">
+        <div class="status-dot online pulse"></div>
+        <span class="status-label font-mono">System Online</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="time-display font-mono">
+        <span id="currentTime">00:00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Video Feed -->
+    <div class="video-container">
+      <div class="video-feed glass-panel">
+        <video id="droneVideo" autoplay muted playsinline crossorigin="anonymous" loop></video>
+        <div class="scan-line"></div>
+        <div class="grid-overlay"></div>
+        <div class="crosshair">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+        </div>
+        
+        <div id="detectionBoxes"></div>
+        
+        <div class="video-info-top-left">
+          <div class="rec-indicator">
+            <div class="rec-dot"></div>
+            <span class="rec-text font-mono">LIVE</span>
+          </div>
+        </div>
+        
+        <div class="video-info-top-right">
+          <span class="frame-counter font-mono">FRAME: <span id="frameCount">000000</span></span>
+        </div>
+        
+        <div class="video-controls">
+          <button class="control-btn glass-panel" id="streamConfigBtn" title="Configure Stream">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>
+          </button>
+          <button class="control-btn glass-panel" id="fullscreenBtn" title="Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+          </button>
+        </div>
+        
+        <div class="stream-status glass-panel" id="streamStatus">
+          <div class="stream-status-dot" id="streamStatusDot"></div>
+          <span class="stream-status-text font-mono" id="streamStatusText">Standby</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="panel glass-panel">
+        <h2 class="panel-title">
+          <div class="panel-title-bar primary"></div>
+          Detection Stats
+        </h2>
+        <div class="stats-grid">
+          <div class="stat-card glass-panel critical">
+            <span class="stat-card-count font-mono critical" id="countCritical">0</span>
+            <p class="stat-card-label font-mono">Critical</p>
+          </div>
+          <div class="stat-card glass-panel moderate">
+            <span class="stat-card-count font-mono moderate" id="countModerate">0</span>
+            <p class="stat-card-label font-mono">Moderate</p>
+          </div>
+          <div class="stat-card glass-panel minor">
+            <span class="stat-card-count font-mono minor" id="countMinor">0</span>
+            <p class="stat-card-label font-mono">Minor</p>
+          </div>
+          <div class="stat-card glass-panel">
+            <span class="stat-card-count font-mono" id="countTotal">0</span>
+            <p class="stat-card-label font-mono">Total</p>
+          </div>
+        </div>
+        <div class="stats-footer">
+          <div class="stats-row">
+            <span class="stats-row-label">Processing Rate</span>
+            <span class="stats-row-value font-mono primary" id="fpsDisplay">-- FPS</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel glass-panel">
+        <div class="alerts-header">
+          <h2 class="panel-title" style="margin-bottom: 0;">
+            <div class="panel-title-bar destructive"></div>
+            Alerts
+          </h2>
+          <span class="alerts-count font-mono"><span id="alertCount">0</span> Active</span>
+        </div>
+        <div class="alerts-list" id="alertsList"></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="telemetry-bar glass-panel">
+    <div class="telemetry-group">
+      <div class="telemetry-item">
+        <div class="telemetry-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" x2="9" y1="1" y2="4"/><line x1="15" x2="15" y1="1" y2="4"/><line x1="9" x2="9" y1="20" y2="23"/><line x1="15" x2="15" y1="20" y2="23"/><line x1="20" x2="23" y1="9" y2="9"/><line x1="20" x2="23" y1="14" y2="14"/><line x1="1" x2="4" y1="9" y2="9"/><line x1="1" x2="4" y1="14" y2="14"/></svg>
+        </div>
+        <div class="telemetry-data">
+          <span class="telemetry-label font-mono">Processed Frames:</span>
+          <span class="telemetry-value font-mono" id="processedFrames">0</span>
+        </div>
+      </div>
+    </div>
+    <div class="model-info">
+      <span class="model-label font-mono">Model:</span>
+      <span class="model-value font-mono" style="color: hsl(var(--success));">Active</span>
+    </div>
+  </footer>
+
+  <!-- Stream Config Modal -->
+  <div class="stream-modal" id="streamModal">
+    <div class="stream-modal-content glass-panel">
+      <div class="stream-modal-header">
+        <h2 class="stream-modal-title">Configure Stream</h2>
+        <button class="stream-modal-close" id="closeModal">✕</button>
+      </div>
+      
+      <label class="stream-option-label">Stream Source</label>
+      <select class="stream-input" id="streamType">
+        <option value="file">Video File</option>
+        <option value="webcam">Local Webcam</option>
+        <option value="roboflow">Roboflow WebRTC</option>
+      </select>
+      
+      <div id="fileConfig">
+        <label class="stream-option-label">Video URL</label>
+        <input type="text" class="stream-input" id="streamUrl" value="https://videos.pexels.com/video-files/3045163/3045163-hd_1920_1080_30fps.mp4">
+      </div>
+
+      <div id="roboflowConfig" style="display:none;">
+        <label class="stream-option-label">RTSP URL</label>
+        <input type="text" class="stream-input" id="rfRtspUrl" placeholder="rtsp://...">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem;">
+          <div>
+            <label class="stream-option-label">Workspace</label>
+            <input type="text" class="stream-input" id="rfWorkspace">
+          </div>
+          <div>
+            <label class="stream-option-label">Workflow ID</label>
+            <input type="text" class="stream-input" id="rfWorkflow">
+          </div>
+        </div>
+      </div>
+      
+      <div class="stream-buttons">
+        <button class="stream-btn stream-btn-secondary" id="cancelStream">Cancel</button>
+        <button class="stream-btn stream-btn-primary" id="connectStream">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { connectors, webrtc } from "https://cdn.jsdelivr.net/npm/@roboflow/inference-sdk/+esm";
+    window.RoboflowSDK = { connectors, webrtc };
+
+    const video = document.getElementById('droneVideo');
+    const modal = document.getElementById('streamModal');
+    const statusText = document.getElementById('streamStatusText');
+    const statusDot = document.getElementById('streamStatusDot');
+    
+    // UI Logic
+    document.getElementById('streamConfigBtn').onclick = () => modal.classList.add('active');
+    document.getElementById('closeModal').onclick = () => modal.classList.remove('active');
+    document.getElementById('cancelStream').onclick = () => modal.classList.remove('active');
+    document.getElementById('fullscreenBtn').onclick = () => {
+      if(!document.fullscreenElement) video.parentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
+
+    const streamTypeSelect = document.getElementById('streamType');
+    streamTypeSelect.onchange = () => {
+      document.getElementById('fileConfig').style.display = streamTypeSelect.value === 'file' ? 'block' : 'none';
+      document.getElementById('roboflowConfig').style.display = streamTypeSelect.value === 'roboflow' ? 'block' : 'none';
+    };
+
+    let processingInterval = null;
+    let frameCount = 0;
+    let processedCount = 0;
+
+    // Connect Stream
+    document.getElementById('connectStream').onclick = async () => {
+      const type = streamTypeSelect.value;
+      modal.classList.remove('active');
+      
+      updateStatus('warning', 'Connecting...');
+      if(processingInterval) clearInterval(processingInterval);
+      
+      try {
+        if(type === 'webcam') {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          video.srcObject = stream;
+          video.play();
+          updateStatus('connected', 'Live Webcam');
+          startProcessing(); // Start ML loop
+        } else if(type === 'file') {
+          video.srcObject = null;
+          video.src = document.getElementById('streamUrl').value;
+          video.play();
+          updateStatus('connected', 'Video File');
+          startProcessing(); // Start ML loop
+        } else if(type === 'roboflow') {
+          // Roboflow WebRTC Logic
+          const rfConfig = {
+            rtspUrl: document.getElementById('rfRtspUrl').value,
+            workspace: document.getElementById('rfWorkspace').value,
+            workflow: document.getElementById('rfWorkflow').value
+          };
+          connectRoboflowWebRTC(rfConfig);
+        }
+      } catch(e) {
+        console.error(e);
+        updateStatus('error', 'Connection Failed');
+      }
+    };
+
+    function updateStatus(type, text) {
+      statusDot.className = `stream-status-dot ${type}`;
+      statusText.innerText = text;
+    }
+
+    // ML Processing Loop (For File/Webcam)
+    function startProcessing() {
+      processingInterval = setInterval(async () => {
+        if(video.readyState < 2) return;
+        
+        // Capture Frame
+        const canvas = document.createElement('canvas');
+        canvas.width = 640; canvas.height = 480;
+        canvas.getContext('2d').drawImage(video, 0, 0, 640, 480);
+        const frameData = canvas.toDataURL('image/jpeg', 0.6);
+
+        // Send to Backend
+        try {
+          const res = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image: frameData })
+          });
+          const data = await res.json();
+          renderDetections(data.detections);
+          processedCount++;
+          document.getElementById('processedFrames').innerText = processedCount;
+          document.getElementById('fpsDisplay').innerText = "2 FPS"; // Capped by interval
+        } catch(e) { console.error(e); }
+      }, 500); // 2 FPS to prevent lag
+    }
+
+    // Roboflow WebRTC Connection
+    async function connectRoboflowWebRTC(config) {
+      if(!window.RoboflowSDK) return;
+      const { connectors, webrtc } = window.RoboflowSDK;
+      
+      const backendConnector = {
+        async init(offer, wrtcParams) {
+          const res = await fetch('/api/init-webrtc', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ offer, wrtcParams })
+          });
+          return await res.json();
+        }
+      };
+
+      try {
+        const conn = await webrtc.useRtspStream({
+          rtspUrl: config.rtspUrl,
+          connector: backendConnector,
+          wrtcParams: {
+            workspaceName: config.workspace,
+            workflowId: config.workflow,
+            streamOutputNames: ["visualization"],
+            dataOutputNames: ["predictions"]
+          },
+          onData: (data) => {
+            // Handle WebRTC Data
+            if(data?.predictions?.predictions) {
+              renderDetections(data.predictions.predictions.map(p => ({
+                bbox: [0,0,0,0], // WebRTC stream handles visuals usually
+                class: p.class,
+                confidence: p.confidence,
+                severity: p.confidence > 0.8 ? 'critical' : 'minor'
+              })));
+            }
+          }
+        });
+        video.srcObject = await conn.remoteStream();
+        video.play();
+        updateStatus('connected', 'Roboflow WebRTC');
+      } catch(e) {
+        console.error(e);
+        updateStatus('error', 'WebRTC Error');
+      }
+    }
+
+    function renderDetections(detections) {
+      const container = document.getElementById('detectionBoxes');
+      container.innerHTML = detections.map(d => {
+        // If bbox is all zeros (WebRTC), don't draw box
+        if(d.bbox[2] === 0) return '';
+        
+        // Calculate % based on 640x480 processing size
+        const x = (d.bbox[0] / 640) * 100;
+        const y = (d.bbox[1] / 480) * 100;
+        const w = (d.bbox[2] / 640) * 100;
+        const h = (d.bbox[3] / 480) * 100;
+        
+        return `<div class="detection-box ${d.severity}" style="left:${x}%; top:${y}%; width:${w}%; height:${h}%;">
+          <div class="detection-label ${d.severity}">${d.class} ${Math.round(d.confidence*100)}%</div>
+        </div>`;
+      }).join('');
+
+      // Update Stats
+      const counts = { critical: 0, moderate: 0, minor: 0 };
+      detections.forEach(d => counts[d.severity]++);
+      document.getElementById('countCritical').innerText = counts.critical;
+      document.getElementById('countModerate').innerText = counts.moderate;
+      document.getElementById('countMinor').innerText = counts.minor;
+      document.getElementById('countTotal').innerText = detections.length;
+    }
+
+    // Clock
+    setInterval(() => {
+      document.getElementById('currentTime').innerText = new Date().toLocaleTimeString();
+      frameCount++;
+      document.getElementById('frameCount').innerText = frameCount.toString().padStart(6, '0');
+    }, 1000);
+  </script>
+</body>
+</html>
