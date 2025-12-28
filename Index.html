@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SKYWATCH AI - Damage Assessment System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- HLS.js for HLS streaming support in non-Safari browsers -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 222 47% 11%;
+      --card: 0 0% 98%;
+      --card-foreground: 222 47% 11%;
+      --popover: 0 0% 98%;
+      --popover-foreground: 222 47% 11%;
+      --primary: 199 89% 48%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 210 40% 96%;
+      --secondary-foreground: 222 47% 11%;
+      --muted: 210 40% 96%;
+      --muted-foreground: 215 20% 35%;
+      --accent: 210 40% 96%;
+      --accent-foreground: 222 47% 11%;
+      --destructive: 0 84% 60%;
+      --destructive-foreground: 0 0% 100%;
+      --warning: 38 92% 50%;
+      --success: 142 76% 36%;
+      --border: 214 32% 91%;
+      --input: 214 32% 91%;
+      --ring: 199 89% 48%;
+      --radius: 0.5rem;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+      color: hsl(var(--foreground));
+      min-height: 100vh;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Glassmorphism Panels */
+    .glass-panel {
+      background: linear-gradient(135deg, hsl(var(--card) / 0.95), hsl(var(--card) / 0.9));
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid hsl(var(--border));
+      box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .glass-panel:hover {
+      border-color: hsl(var(--border) / 0.8);
+      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15), 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .glow-primary {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.4), 0 0 40px hsl(var(--primary) / 0.15), 0 0 60px hsl(var(--primary) / 0.05);
+    }
+
+    /* Animations */
+    @keyframes scan { 0% { transform: translateY(-100%); } 100% { transform: translateY(calc(100vh * 10)); } }
+    @keyframes pulse-glow { 0%, 100% { opacity: 1; box-shadow: 0 0 5px currentColor; } 50% { opacity: 0.7; box-shadow: 0 0 20px currentColor, 0 0 30px currentColor; } }
+    @keyframes radar-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes fade-in-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+
+    .animate-scan { animation: scan 4s linear infinite; }
+    .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+    .animate-radar-sweep { animation: radar-sweep 4s linear infinite; }
+    .animate-fade-in-up { animation: fade-in-up 0.3s ease-out; }
+    .animate-pulse { animation: blink 1s infinite; }
+    .animate-ping { animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-radius: calc(var(--radius) + 0.25rem);
+    }
+
+    .header-left, .header-right { display: flex; align-items: center; gap: 1.5rem; }
+    .logo-container { display: flex; align-items: center; gap: 0.75rem; }
+
+    .logo-icon {
+      width: 2rem; height: 2rem; border-radius: var(--radius);
+      background: hsl(var(--primary) / 0.2);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .logo-icon svg { width: 1rem; height: 1rem; color: hsl(var(--primary)); }
+    .logo-text h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.02em; }
+    .logo-text p { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.1em; color: hsl(var(--muted-foreground)); font-weight: 500; }
+
+    .divider { width: 1px; height: 1.5rem; background: hsl(var(--border)); }
+
+    .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
+    .status-dot { position: relative; width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+    .status-dot.online { background: hsl(var(--success)); }
+    .status-dot.warning { background: hsl(var(--warning)); }
+    .status-dot.offline { background: hsl(var(--destructive)); }
+    .status-dot.pulse::after {
+      content: ''; position: absolute; inset: 0; border-radius: 50%;
+      background: inherit; opacity: 0.5; animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+    .status-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: hsl(var(--muted-foreground)); }
+    .status-value { font-size: 0.8125rem; color: hsl(var(--foreground)); font-weight: 600; }
+
+    .header-stats { display: flex; align-items: center; gap: 1.5rem; font-size: 0.8125rem; font-weight: 500; }
+    .header-stat { display: flex; align-items: center; gap: 0.5rem; color: hsl(var(--muted-foreground)); }
+    .header-stat svg { width: 0.875rem; height: 0.875rem; }
+    .header-stat svg.success { color: hsl(var(--success)); }
+    .header-stat svg.primary { color: hsl(var(--primary)); }
+
+    .time-display { display: flex; align-items: center; gap: 0.5rem; color: hsl(var(--muted-foreground)); font-size: 0.8125rem; font-weight: 500; }
+    .time-display svg { width: 0.875rem; height: 0.875rem; }
+
+    /* Main Content */
+    .main-content { flex: 1; display: flex; gap: 1.25rem; min-height: 0; }
+    .video-container { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    .video-feed {
+      position: relative; flex: 1; border-radius: calc(var(--radius) + 0.25rem);
+      overflow: hidden; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .video-feed video, .video-feed img { width: 100%; height: 100%; object-fit: cover; }
+    
+    .scan-line { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+    .scan-line::before {
+      content: ''; display: block; width: 100%; height: 2px;
+      background: linear-gradient(to right, transparent, hsl(var(--primary) / 0.5), transparent);
+      animation: scan 4s linear infinite;
+    }
+
+    .grid-overlay {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0.2;
+      background-image: linear-gradient(to right, hsl(var(--primary) / 0.1) 1px, transparent 1px),
+                        linear-gradient(to bottom, hsl(var(--primary) / 0.1) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+
+    .crosshair {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    }
+    .crosshair svg { width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.3); }
+
+    .video-info-top-left { position: absolute; top: 0.75rem; left: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+    .rec-indicator { display: flex; align-items: center; gap: 0.5rem; }
+    .rec-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: hsl(var(--destructive)); animation: blink 1s infinite; }
+    .rec-text { font-size: 0.8125rem; font-weight: 700; color: hsl(var(--destructive)); letter-spacing: 0.1em; }
+    .unit-text { font-size: 0.625rem; color: hsl(var(--foreground) / 0.7); }
+
+    .video-info-top-right { position: absolute; top: 0.75rem; right: 0.75rem; text-align: right; }
+    .frame-counter { font-size: 0.8125rem; color: hsl(var(--foreground) / 0.8); font-weight: 500; }
+
+    .gps-info { position: absolute; bottom: 0.75rem; left: 0.75rem; padding: 0.75rem 1rem; border-radius: calc(var(--radius) + 0.125rem); }
+    .gps-grid { display: grid; grid-template-columns: auto auto; gap: 0.375rem 1.25rem; font-size: 0.6875rem; }
+    .gps-label { color: hsl(var(--muted-foreground)); }
+    .gps-value { color: hsl(var(--foreground)); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    .video-controls { position: absolute; bottom: 0.75rem; right: 0.75rem; display: flex; gap: 0.5rem; }
+    .control-btn {
+      padding: 0.625rem; border-radius: calc(var(--radius) + 0.125rem); border: none; cursor: pointer;
+      background: hsl(var(--secondary)); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(8px);
+    }
+    .control-btn:hover { background: hsl(var(--secondary) / 0.8); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+    .control-btn svg { width: 1rem; height: 1rem; color: hsl(var(--foreground)); }
+
+    /* Stream Status Overlay */
+    .stream-status {
+      position: absolute; top: 0.75rem; left: 50%; transform: translateX(-50%);
+      padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; z-index: 10;
+    }
+    .stream-status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: hsl(var(--warning)); animation: blink 1s infinite; }
+    .stream-status-dot.connected { background: hsl(var(--success)); animation: none; }
+    .stream-status-dot.error { background: hsl(var(--destructive)); animation: blink 0.5s infinite; }
+    .stream-status-text { font-size: 0.75rem; font-weight: 600; color: hsl(var(--foreground)); }
+
+    /* Detection Boxes */
+    .detection-box { position: absolute; border-width: 2px; border-style: solid; pointer-events: none; }
+    .detection-box.critical { border-color: hsl(var(--destructive)); color: hsl(var(--destructive)); animation: pulse-glow 2s ease-in-out infinite; }
+    .detection-box.moderate { border-color: hsl(var(--warning)); color: hsl(var(--warning)); }
+    .detection-box.minor { border-color: hsl(var(--success)); color: hsl(var(--success)); }
+
+    .detection-corner { position: absolute; width: 0.75rem; height: 0.75rem; border-color: currentColor; border-style: solid; }
+    .detection-corner.tl { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+    .detection-corner.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
+    .detection-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 2px 2px; }
+    .detection-corner.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+    .detection-label {
+      position: absolute; top: -1.5rem; left: 0; padding: 0.125rem 0.375rem;
+      font-size: 0.625rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+    }
+    .detection-label.critical { background: hsl(var(--destructive) / 0.1); }
+    .detection-label.moderate { background: hsl(var(--warning) / 0.1); }
+    .detection-label.minor { background: hsl(var(--success) / 0.1); }
+
+    /* Sidebar */
+    .sidebar { width: 22rem; display: flex; flex-direction: column; gap: 1.25rem; flex-shrink: 0; }
+    .panel { padding: 1.25rem; border-radius: calc(var(--radius) + 0.25rem); }
+    .panel-title { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.75rem; }
+    .panel-title-bar { width: 0.375rem; height: 1.25rem; border-radius: 9999px; box-shadow: 0 0 8px currentColor; }
+    .panel-title-bar.primary { background: hsl(var(--primary)); }
+    .panel-title-bar.destructive { background: hsl(var(--destructive)); }
+
+    /* Stats Grid */
+    .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .stat-card {
+      padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; overflow: hidden;
+    }
+    .stat-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, currentColor, transparent); opacity: 0; transition: opacity 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+    .stat-card:hover::before { opacity: 0.6; }
+
+    .stat-card.critical { border-color: hsl(var(--destructive) / 0.3); background: hsl(var(--destructive) / 0.05); }
+    .stat-card.moderate { border-color: hsl(var(--warning) / 0.3); background: hsl(var(--warning) / 0.05); }
+    .stat-card.minor { border-color: hsl(var(--success) / 0.3); background: hsl(var(--success) / 0.05); }
+
+    .stat-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+    .stat-card-icon { color: hsl(var(--muted-foreground)); }
+    .stat-card-icon svg { width: 1rem; height: 1rem; }
+
+    .stat-card-count { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+    .stat-card-count.critical { color: hsl(var(--destructive)); text-shadow: 0 0 10px hsl(var(--destructive) / 0.5); }
+    .stat-card-count.moderate { color: hsl(var(--warning)); }
+    .stat-card-count.minor { color: hsl(var(--success)); }
+
+    .stat-card-label { font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.05em; color: hsl(var(--muted-foreground)); }
+
+    .stats-footer { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid hsl(var(--border)); }
+    .stats-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; }
+    .stats-row-label { color: hsl(var(--muted-foreground)); }
+    .stats-row-value { font-weight: 700; }
+    .stats-row-value.primary { color: hsl(var(--primary)); text-shadow: 0 0 10px hsl(var(--primary) / 0.5); }
+
+    /* Alerts */
+    .alerts-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .alerts-count { font-size: 0.625rem; color: hsl(var(--muted-foreground)); }
+    .alerts-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 17.5rem; overflow-y: auto; padding-right: 0.25rem; }
+
+    .alert-item {
+      position: relative; padding: 1rem; border-radius: calc(var(--radius) + 0.125rem); border: 1px solid;
+      animation: fade-in-up 0.3s ease-out; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .alert-item:hover { transform: translateX(4px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+    .alert-item.critical { border-color: hsl(var(--destructive) / 0.5); background: hsl(var(--destructive) / 0.1); }
+    .alert-item.moderate { border-color: hsl(var(--warning) / 0.5); background: hsl(var(--warning) / 0.1); }
+    .alert-item.minor { border-color: hsl(var(--success) / 0.5); background: hsl(var(--success) / 0.1); }
+
+    .alert-content { display: flex; align-items: flex-start; gap: 0.5rem; padding-right: 1rem; }
+    .alert-icon { flex-shrink: 0; margin-top: 0.125rem; }
+    .alert-icon svg { width: 1rem; height: 1rem; }
+    .alert-icon.critical svg { color: hsl(var(--destructive)); }
+    .alert-icon.moderate svg { color: hsl(var(--warning)); }
+    
+    .alert-text { flex: 1; min-width: 0; }
+    .alert-message { font-size: 0.8125rem; font-weight: 600; line-height: 1.5; }
+    .alert-meta { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; font-size: 0.625rem; color: hsl(var(--muted-foreground)); }
+
+    /* Mini Map */
+    .mini-map-container {
+      position: relative; aspect-ratio: 1; background: hsl(var(--secondary) / 0.5); border-radius: var(--radius); overflow: hidden;
+    }
+    .mini-map-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
+                        linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .mini-map-terrain { position: absolute; inset: 0; opacity: 0.3; }
+    .mini-map-scan-area { position: absolute; inset: 1rem; border: 1px dashed hsl(var(--primary) / 0.3); border-radius: var(--radius); }
+    .radar-sweep {
+      position: absolute; inset: 0; animation: radar-sweep 4s linear infinite;
+      background: conic-gradient(from 0deg, transparent 0deg, hsl(var(--primary) / 0.2) 30deg, transparent 60deg);
+    }
+    .drone-position { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    .drone-marker {
+      position: relative; width: 1rem; height: 1rem; border-radius: 50%; background: hsl(var(--primary));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .drone-marker svg { width: 0.625rem; height: 0.625rem; color: hsl(var(--primary-foreground)); transform: rotate(45deg); }
+    .drone-ping { position: absolute; inset: 0; border-radius: 50%; background: hsl(var(--primary) / 0.5); animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+    /* Telemetry Bar */
+    .telemetry-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem; border-radius: calc(var(--radius) + 0.25rem);
+    }
+    .telemetry-group { display: flex; align-items: center; gap: 1.5rem; }
+    .telemetry-item { display: flex; align-items: center; gap: 0.5rem; }
+    .telemetry-icon { color: hsl(var(--muted-foreground)); }
+    .telemetry-icon svg { width: 0.875rem; height: 0.875rem; }
+    .telemetry-data { display: flex; align-items: baseline; gap: 0.25rem; }
+    .telemetry-label { font-size: 0.625rem; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+    .telemetry-value { font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .telemetry-unit { font-size: 0.625rem; color: hsl(var(--muted-foreground)); }
+    .model-info { display: flex; align-items: center; gap: 0.5rem; }
+    .model-label { font-size: 0.625rem; text-transform: uppercase; color: hsl(var(--muted-foreground)); }
+    .model-value { font-size: 0.8125rem; font-weight: 600; color: hsl(var(--primary)); letter-spacing: -0.01em; }
+
+    /* Config Modal */
+    .stream-modal {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .stream-modal.active { display: flex; }
+    .stream-modal-content {
+      background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) + 0.5rem); padding: 2rem; max-width: 600px; width: 90%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .stream-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+    .stream-modal-title { font-size: 1.25rem; font-weight: 700; }
+    .stream-modal-close { background: none; border: none; color: hsl(var(--muted-foreground)); cursor: pointer; padding: 0.5rem; }
+    
+    .stream-option { margin-bottom: 1.5rem; }
+    .stream-option-label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; color: hsl(var(--foreground)); }
+    .stream-input {
+      width: 100%; padding: 0.75rem; background: hsl(var(--secondary)); border: 1px solid hsl(var(--border));
+      border-radius: var(--radius); color: hsl(var(--foreground)); font-family: 'JetBrains Mono', monospace; font-size: 0.875rem;
+    }
+    .stream-buttons { display: flex; gap: 1rem; margin-top: 2rem; }
+    .stream-btn {
+      flex: 1; padding: 0.875rem 1.5rem; border-radius: var(--radius); border: none; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .stream-btn-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+    .stream-btn-secondary { background: hsl(var(--secondary)); color: hsl(var(--foreground)); }
+
+    /* Toast */
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 2000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast {
+      padding: 1.25rem 1.5rem; border-radius: calc(var(--radius) + 0.25rem); border: 1px solid;
+      animation: fade-in-up 0.3s ease-out; backdrop-filter: blur(16px);
+    }
+    .toast.error { background: hsl(var(--destructive)); border-color: hsl(var(--destructive)); color: white; }
+    .toast.warning { background: hsl(var(--warning)); border-color: hsl(var(--warning)); color: white; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: hsl(var(--secondary)); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: hsl(var(--muted-foreground) / 0.4); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Header -->
+  <header class="header glass-panel">
+    <div class="header-left">
+      <div class="logo-container">
+        <div class="logo-icon glow-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></svg>
+        </div>
+        <div class="logo-text">
+          <h1>SKYWATCH AI</h1>
+          <p class="font-mono">Damage Assessment System</p>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="status-indicator">
+        <div class="status-dot online pulse"></div>
+        <span class="status-label font-mono">Connection</span>
+      </div>
+      <div class="status-indicator">
+        <div class="status-dot online"></div>
+        <span class="status-label font-mono">AI Engine</span>
+        <span class="status-value font-mono">Active</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-stats font-mono">
+        <div class="header-stat">
+          <svg class="success" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></svg>
+          <span>98%</span>
+        </div>
+        <div class="header-stat">
+          <svg class="primary" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          <span>GPS Lock</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="time-display font-mono">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="currentTime">00:00:00</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Video Feed -->
+    <div class="video-container">
+      <div class="video-feed glass-panel">
+        <video id="droneVideo" autoplay muted playsinline crossorigin="anonymous" loop></video>
+        <div class="scan-line"></div>
+        <div class="grid-overlay"></div>
+        <div class="crosshair">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></svg>
+        </div>
+        
+        <!-- Detection Boxes -->
+        <div id="detectionBoxes"></div>
+        
+        <div class="video-info-top-left">
+          <div class="rec-indicator">
+            <div class="rec-dot"></div>
+            <span class="rec-text font-mono">LIVE</span>
+          </div>
+          <span class="unit-text font-mono">UNIT: DRN-7842</span>
+        </div>
+        
+        <div class="video-info-top-right">
+          <span class="frame-counter font-mono">FRAME: <span id="frameCount">000000</span></span>
+        </div>
+        
+        <div class="gps-info glass-panel">
+          <div class="gps-grid font-mono">
+            <span class="gps-label">LAT:</span><span class="gps-value">34.0522°N</span>
+            <span class="gps-label">LON:</span><span class="gps-value">118.2437°W</span>
+            <span class="gps-label">ALT:</span><span class="gps-value">152m AGL</span>
+            <span class="gps-label">HDG:</span><span class="gps-value">247°</span>
+          </div>
+        </div>
+        
+        <div class="video-controls">
+          <button class="control-btn glass-panel" id="streamConfigBtn" title="Configure Stream">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>
+          </button>
+          <button class="control-btn glass-panel" id="fullscreenBtn" title="Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/></svg>
+          </button>
+        </div>
+        
+        <!-- Stream Status Indicator -->
+        <div class="stream-status glass-panel" id="streamStatus">
+          <div class="stream-status-dot" id="streamStatusDot"></div>
+          <span class="stream-status-text font-mono" id="streamStatusText">Standby</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <!-- Detection Stats -->
+      <div class="panel glass-panel">
+        <h2 class="panel-title">
+          <div class="panel-title-bar primary"></div>
+          Detection Summary
+        </h2>
+        <div class="stats-grid">
+          <div class="stat-card glass-panel critical">
+            <div class="stat-card-header">
+              <div class="stat-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>
+              </div>
+              <span class="stat-card-count font-mono critical" id="countCritical">0</span>
+            </div>
+            <p class="stat-card-label font-mono">Critical</p>
+          </div>
+          <div class="stat-card glass-panel moderate">
+            <div class="stat-card-header">
+              <div class="stat-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              </div>
+              <span class="stat-card-count font-mono moderate" id="countModerate">0</span>
+            </div>
+            <p class="stat-card-label font-mono">Moderate</p>
+          </div>
+          <div class="stat-card glass-panel minor">
+            <div class="stat-card-header">
+              <div class="stat-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+              </div>
+              <span class="stat-card-count font-mono minor" id="countMinor">0</span>
+            </div>
+            <p class="stat-card-label font-mono">Minor</p>
+          </div>
+          <div class="stat-card glass-panel" style="border-color: hsl(var(--border));">
+             <div class="stat-card-header">
+              <div class="stat-card-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              </div>
+              <span class="stat-card-count font-mono" id="countTotal">0</span>
+            </div>
+            <p class="stat-card-label font-mono">Total</p>
+          </div>
+        </div>
+        <div class="stats-footer">
+          <div class="stats-row">
+            <span class="stats-row-label">Processing Rate</span>
+            <span class="stats-row-value font-mono primary" id="fpsDisplay">-- FPS</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert Panel -->
+      <div class="panel glass-panel">
+        <div class="alerts-header">
+          <h2 class="panel-title" style="margin-bottom: 0;">
+            <div class="panel-title-bar destructive"></div>
+            Live Alerts
+          </h2>
+          <span class="alerts-count font-mono"><span id="alertCount">0</span> Active</span>
+        </div>
+        <div class="alerts-list" id="alertsList"></div>
+      </div>
+
+      <!-- Mini Map -->
+      <div class="panel glass-panel">
+        <h2 class="panel-title">
+          <div class="panel-title-bar primary"></div>
+          Coverage Map
+        </h2>
+        <div class="mini-map-container">
+          <div class="mini-map-grid"></div>
+          <div class="mini-map-terrain"></div>
+          <div class="mini-map-scan-area"></div>
+          <div class="radar-sweep"></div>
+          <div class="drone-position">
+            <div class="drone-ping"></div>
+            <div class="drone-marker glow-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Telemetry Bar -->
+  <footer class="telemetry-bar glass-panel">
+    <div class="telemetry-group">
+      <div class="telemetry-item">
+        <div class="telemetry-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
+        </div>
+        <div class="telemetry-data">
+          <span class="telemetry-label font-mono">Speed:</span>
+          <span class="telemetry-value font-mono" id="speedValue">12.4</span>
+          <span class="telemetry-unit font-mono">m/s</span>
+        </div>
+      </div>
+      <div class="telemetry-item">
+        <div class="telemetry-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>
+        </div>
+        <div class="telemetry-data">
+          <span class="telemetry-label font-mono">Temp:</span>
+          <span class="telemetry-value font-mono">42</span>
+          <span class="telemetry-unit font-mono">°C</span>
+        </div>
+      </div>
+      <div class="telemetry-item">
+        <div class="telemetry-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></svg>
+        </div>
+        <div class="telemetry-data">
+          <span class="telemetry-label font-mono">Wind:</span>
+          <span class="telemetry-value font-mono">8.2</span>
+          <span class="telemetry-unit font-mono">km/h</span>
+        </div>
+      </div>
+    </div>
+    <div class="telemetry-group">
+      <div class="telemetry-item">
+        <div class="telemetry-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" x2="9" y1="1" y2="4"/><line x1="15" x2="15" y1="1" y2="4"/><line x1="9" x2="9" y1="20" y2="23"/><line x1="15" x2="15" y1="20" y2="23"/><line x1="20" x2="23" y1="9" y2="9"/><line x1="20" x2="23" y1="14" y2="14"/><line x1="1" x2="4" y1="9" y2="9"/><line x1="1" x2="4" y1="14" y2="14"/></svg>
+        </div>
+        <div class="telemetry-data">
+          <span class="telemetry-label font-mono">Processed:</span>
+          <span class="telemetry-value font-mono" id="processedFrames">0</span>
+        </div>
+      </div>
+      <div class="model-info">
+        <span class="model-label font-mono">Model:</span>
+        <span class="model-value font-mono" id="modelName">YOLOv8</span>
+      </div>
+      <div class="model-info" style="margin-top: 0.5rem;">
+        <span class="model-label font-mono">Status:</span>
+        <span class="model-value font-mono" id="modelStatus" style="color: hsl(var(--success));">Active</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Stream Config Modal -->
+  <div class="stream-modal" id="streamModal">
+    <div class="stream-modal-content glass-panel">
+      <div class="stream-modal-header">
+        <h2 class="stream-modal-title">Configure Stream</h2>
+        <button class="stream-modal-close" id="closeModal">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+        </button>
+      </div>
+      
+      <div class="stream-option">
+        <label class="stream-option-label">Stream Source</label>
+        <select class="stream-input" id="streamType">
+          <option value="webcam">Local Webcam</option>
+          <option value="file">Video File</option>
+          <option value="roboflow">Roboflow WebRTC</option>
+        </select>
+      </div>
+      
+      <div id="fileConfig" style="display:none;">
+        <div class="stream-option">
+          <label class="stream-option-label">Video URL</label>
+          <input type="text" class="stream-input" id="streamUrl" value="https://videos.pexels.com/video-files/3045163/3045163-hd_1920_1080_30fps.mp4">
+        </div>
+      </div>
+
+      <div id="roboflowConfig" style="display:none;">
+        <div class="stream-option">
+          <label class="stream-option-label">RTSP URL</label>
+          <input type="text" class="stream-input" id="rfRtspUrl" placeholder="rtsp://...">
+        </div>
+        <div class="stream-option">
+           <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+             <div>
+                <label class="stream-option-label">Workspace</label>
+                <input type="text" class="stream-input" id="rfWorkspace" placeholder="Workspace">
+             </div>
+             <div>
+                <label class="stream-option-label">Workflow ID</label>
+                <input type="text" class="stream-input" id="rfWorkflow" placeholder="Workflow ID">
+             </div>
+           </div>
+        </div>
+      </div>
+      
+      <div class="stream-buttons">
+        <button class="stream-btn stream-btn-secondary" id="cancelStream">Cancel</button>
+        <button class="stream-btn stream-btn-primary" id="connectStream">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // --- 1. SETUP & IMPORTS ---
+    import { connectors, webrtc } from "https://cdn.jsdelivr.net/npm/@roboflow/inference-sdk/+esm";
+    window.RoboflowSDK = { connectors, webrtc };
+
+    const video = document.getElementById('droneVideo');
+    const modal = document.getElementById('streamModal');
+    const streamTypeSelect = document.getElementById('streamType');
+    let processingInterval = null;
+    let processedCount = 0;
+    let alerts = [];
+
+    // --- 2. UI FUNCTIONS ---
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast warning';
+      toast.innerText = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    function updateStatus(type, text) {
+      const dot = document.getElementById('streamStatusDot');
+      const txt = document.getElementById('streamStatusText');
+      dot.className = `stream-status-dot ${type}`;
+      txt.innerText = text;
+    }
+
+    // --- 3. CONNECTION LOGIC ---
+    document.getElementById('connectStream').onclick = async () => {
+      const type = streamTypeSelect.value;
+      modal.classList.remove('active');
+      
+      updateStatus('warning', 'Connecting...');
+      if(processingInterval) clearInterval(processingInterval);
+      
+      try {
+        if(type === 'webcam') {
+          // --- WEBCAM LOGIC ---
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            await video.play();
+            updateStatus('connected', 'Live Webcam');
+            startProcessingLoop(); 
+          } catch (err) {
+            console.error("Camera Error:", err);
+            if (err.name === 'NotAllowedError') {
+               showToast('Permission Denied: Please allow camera access in browser settings.');
+            } else if (err.name === 'NotFoundError') {
+               showToast('No Camera Found: Please connect a webcam.');
+            } else {
+               showToast(`Camera Error: ${err.message}`);
+            }
+            updateStatus('error', 'Camera Failed');
+          }
+
+        } else if(type === 'file') {
+          // --- FILE LOGIC ---
+          video.srcObject = null;
+          video.src = document.getElementById('streamUrl').value;
+          video.play();
+          updateStatus('connected', 'Video File');
+          startProcessingLoop();
+
+        } else if(type === 'roboflow') {
+          // --- ROBOFLOW LOGIC ---
+          const rfConfig = {
+            rtspUrl: document.getElementById('rfRtspUrl').value,
+            workspace: document.getElementById('rfWorkspace').value,
+            workflow: document.getElementById('rfWorkflow').value
+          };
+          connectRoboflow(rfConfig);
+        }
+      } catch(e) {
+        console.error(e);
+        updateStatus('error', 'Connection Failed');
+      }
+    };
+
+    // --- 4. ML PROCESSING LOOP (For File/Webcam) ---
+    function startProcessingLoop() {
+      processingInterval = setInterval(async () => {
+        if(video.readyState < 2 || video.paused) return;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 640; canvas.height = 480;
+        canvas.getContext('2d').drawImage(video, 0, 0, 640, 480);
+        const frameData = canvas.toDataURL('image/jpeg', 0.5);
+
+        try {
+          const res = await fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ image: frameData })
+          });
+          const data = await res.json();
+          
+          if(data.error) throw new Error(data.error);
+          
+          renderDetections(data.detections);
+          
+          processedCount++;
+          document.getElementById('processedFrames').innerText = processedCount.toLocaleString();
+          document.getElementById('fpsDisplay').innerText = "2 FPS"; // Limiter
+        } catch(e) { 
+          // console.log("Inference skipped:", e.message); 
+        }
+      }, 500); // 2 FPS to prevent lag
+    }
+
+    // --- 5. ROBOFLOW WEBRTC ---
+    async function connectRoboflow(config) {
+        if(!window.RoboflowSDK) return showToast("SDK not loaded");
+        const { webrtc } = window.RoboflowSDK;
+        
+        const backendConnector = {
+            async init(offer, wrtcParams) {
+                const res = await fetch('/api/init-webrtc', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ offer, wrtcParams })
+                });
+                return await res.json();
+            }
+        };
+
+        try {
+            const conn = await webrtc.useRtspStream({
+                rtspUrl: config.rtspUrl,
+                connector: backendConnector,
+                wrtcParams: {
+                    workspaceName: config.workspace,
+                    workflowId: config.workflow,
+                    streamOutputNames: ["visualization"],
+                    dataOutputNames: ["predictions"]
+                },
+                onData: (data) => {
+                    if(data?.predictions?.predictions) {
+                       renderDetections(data.predictions.predictions);
+                    }
+                }
+            });
+            video.srcObject = await conn.remoteStream();
+            video.play();
+            updateStatus('connected', 'Roboflow Stream');
+        } catch(e) {
+            showToast("WebRTC Error: " + e.message);
+            updateStatus('error', 'WebRTC Failed');
+        }
+    }
+
+    // --- 6. RENDER & ALERTS ---
+    function renderDetections(detections) {
+      const container = document.getElementById('detectionBoxes');
+      container.innerHTML = detections.map(d => {
+        // Handle Roboflow format vs Backend format
+        const x = d.bbox ? (d.bbox[0]/640)*100 : (d.x - d.width/2); 
+        const y = d.bbox ? (d.bbox[1]/480)*100 : (d.y - d.height/2);
+        const w = d.bbox ? (d.bbox[2]/640)*100 : d.width;
+        const h = d.bbox ? (d.bbox[3]/480)*100 : d.height;
+        const cls = d.class || d.type;
+        const conf = d.confidence;
+        
+        // Add Alert if high confidence
+        if(conf > 0.8 && Math.random() > 0.95) addAlert(cls, 'critical');
+
+        // If WebRTC (no bbox), skip drawing
+        if(!d.bbox && !d.width) return '';
+
+        const severity = conf > 0.8 ? 'critical' : (conf > 0.5 ? 'moderate' : 'minor');
+        
+        return `<div class="detection-box ${severity}" style="left:${x}%; top:${y}%; width:${w}%; height:${h}%;">
+          <div class="detection-corner tl"></div><div class="detection-corner tr"></div>
+          <div class="detection-corner bl"></div><div class="detection-corner br"></div>
+          <div class="detection-label ${severity}">${cls} ${Math.round(conf*100)}%</div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('countTotal').innerText = detections.length;
+      const critical = detections.filter(d => d.confidence > 0.8).length;
+      const moderate = detections.filter(d => d.confidence <= 0.8 && d.confidence > 0.5).length;
+      const minor = detections.filter(d => d.confidence <= 0.5).length;
+      
+      document.getElementById('countCritical').innerText = critical;
+      document.getElementById('countModerate').innerText = moderate;
+      document.getElementById('countMinor').innerText = minor;
+    }
+
+    function addAlert(type, severity) {
+      const alert = { time: new Date().toLocaleTimeString(), type, severity };
+      alerts = [alert, ...alerts].slice(0, 10); // Keep last 10
+      
+      const list = document.getElementById('alertsList');
+      list.innerHTML = alerts.map(a => `
+        <div class="alert-item ${a.severity}">
+          <div class="alert-content">
+            <div class="alert-icon ${a.severity}">
+               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+            </div>
+            <div class="alert-text">
+              <p class="alert-message">${a.type.toUpperCase()} DETECTED</p>
+              <div class="alert-meta">
+                <span>${a.time}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // --- 7. EVENT LISTENERS ---
+    document.getElementById('streamConfigBtn').onclick = () => modal.classList.add('active');
+    document.getElementById('closeModal').onclick = () => modal.classList.remove('active');
+    document.getElementById('cancelStream').onclick = () => modal.classList.remove('active');
+    document.getElementById('fullscreenBtn').onclick = () => {
+      if(!document.fullscreenElement) video.parentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
+    
+    streamTypeSelect.onchange = () => {
+      document.getElementById('fileConfig').style.display = streamTypeSelect.value === 'file' ? 'block' : 'none';
+      document.getElementById('roboflowConfig').style.display = streamTypeSelect.value === 'roboflow' ? 'block' : 'none';
+    };
+
+    // Update time
+    setInterval(() => {
+      document.getElementById('currentTime').innerText = new Date().toLocaleTimeString();
+    }, 1000);
+    
+    // Simulate telemetry
+    setInterval(() => {
+        document.getElementById('speedValue').innerText = (10 + Math.random() * 5).toFixed(1);
+    }, 2000);
+  </script>
+</body>
+</html>
