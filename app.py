@@ -5,6 +5,7 @@ import numpy as np
 import base64
 import os
 import requests 
+import uuid  # Added for unique filenames
 
 app = Flask(__name__, template_folder='templates')
 
@@ -40,6 +41,11 @@ def init_webrtc():
     try:
         # 1. Get the Offer and Params from Frontend
         client_data = request.json
+        
+        # Safety Check: Ensure JSON was received
+        if not client_data:
+            return jsonify({'error': 'Invalid or missing JSON body'}), 400
+            
         offer = client_data.get('offer')
         wrtc_params = client_data.get('wrtcParams', {})
 
@@ -84,6 +90,7 @@ def predict():
     if not model:
         return jsonify({'error': 'Model not configured'}), 500
 
+    temp_filename = None
     try:
         data = request.json
         if not data or 'image' not in data:
@@ -98,8 +105,12 @@ def predict():
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Save temp file
-        temp_filename = "temp_frame.jpg"
+        # Safety Check: Ensure image decoded correctly
+        if img is None:
+            return jsonify({'error': 'Failed to decode image data'}), 400
+        
+        # Save temp file with unique name to prevent conflicts
+        temp_filename = f"temp_frame_{uuid.uuid4().hex}.jpg"
         cv2.imwrite(temp_filename, img)
 
         # Run Inference
@@ -126,6 +137,14 @@ def predict():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+        
+    finally:
+        # Cleanup temp file
+        if temp_filename and os.path.exists(temp_filename):
+            try:
+                os.remove(temp_filename)
+            except:
+                pass
 
 if __name__ == "__main__":
     if not os.path.exists('templates'):
